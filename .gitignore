@@ -1,0 +1,32 @@
+# Rust
+/target/
+**/target/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tauri
+shell/src-tauri/target/
+shell/dist/
+shell/.vite/
+
+# Build artifacts
+*.exe
+*.dll
+*.dylib
+*.so
+*.pdb
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.*
+!.env.example
