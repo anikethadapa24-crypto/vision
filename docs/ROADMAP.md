@@ -16,13 +16,13 @@ This is the build plan for Vision and the process we follow while executing it. 
 ## Phase 0 — Foundation
 
 ### M0. Repo & Tooling Bootstrap
-- [ ] Initialize repo structure: `daemon/` (Rust), `shell/` (Tauri UI), `extension/` (browser), `docs/` (PRD, ARCHITECTURE, ROADMAP)
-- [ ] Set up Cargo workspace for daemon + shared crates
-- [ ] Set up Tauri project for Tray App / Query UI
-- [ ] CI: build + lint + test on Windows/macOS/Linux runners
-- [ ] Decide and pin: embedded graph DB (Kùzu per `ARCHITECTURE.md` §9 open question), embedded vector index (LanceDB), local LLM runtime (`llama.cpp`/ONNX)
+- [x] Initialize repo structure: `daemon/` (Rust), `shell/` (Tauri UI), `extension/` (browser), `docs/` (PRD, ARCHITECTURE, ROADMAP)
+- [x] Set up Cargo workspace for daemon + shared crates
+- [x] Set up Tauri project for Tray App / Query UI
+- [ ] CI: build + lint + test on Windows/macOS/Linux runners — workflow authored (`.github/workflows/ci.yml`), equivalent steps verified locally on Windows; not yet run on GitHub because the repo has no remote yet
+- [x] Decide and pin: embedded graph DB (Kùzu per `ARCHITECTURE.md` §9.1), embedded vector index (LanceDB), local LLM runtime (`llama.cpp`, ONNX as pluggable fallback)
 - **Depends on:** —
-- **Exit Criteria:** `cargo build` and `tauri build` succeed on all 3 target OSes in CI; empty daemon binary runs and exits cleanly.
+- **Exit Criteria:** `cargo build` and `tauri build` succeed on all 3 target OSes in CI; empty daemon binary runs and exits cleanly. **Not yet met** — Windows verified locally, but "in CI on all 3 OSes" needs a remote to actually execute `ci.yml`.
 - **Maps to:** §7 (Process & Deployment Topology)
 
 ### M1. Daemon Skeleton + Local API Gateway

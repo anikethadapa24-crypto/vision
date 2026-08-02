@@ -21,14 +21,14 @@ If a task can't clear this bar in one sitting, it's too big — split it before 
 Pull from the top. Nothing below M2 is expanded yet — see §3.
 
 ### M0. Repo & Tooling Bootstrap
-- [ ] Create repo skeleton: `daemon/`, `shell/`, `extension/`, `docs/`
-- [ ] Move `PRD.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `UI.SPEC.md`, `TASKS.md` into `docs/`
-- [ ] `git init`, initial commit, `.gitignore` for Rust/Node/Tauri build artifacts
-- [ ] Cargo workspace: `daemon/Cargo.toml` + crate skeleton (`vision-core`, `vision-proto`)
-- [ ] Tauri scaffold in `shell/`
-- [ ] CI workflow: build + lint + test matrix across `windows-latest` / `macos-latest` / `ubuntu-latest`
-- [ ] Resolve `ARCHITECTURE.md` §9's open question with a short written decision (Kùzu vs. Memgraph, LanceDB, llama.cpp vs. ONNX) — one paragraph each, committed to `docs/`, not just decided in conversation
-- [ ] Confirm an empty daemon binary builds and runs clean on all 3 CI runners
+- [x] Create repo skeleton: `daemon/`, `shell/`, `extension/`, `docs/`
+- [x] Move `PRD.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `UI.SPEC.md`, `TASKS.md` into `docs/`
+- [x] `git init`, initial commit, `.gitignore` for Rust/Node/Tauri build artifacts
+- [x] Cargo workspace: `daemon/Cargo.toml` + crate skeleton (`vision-core`, `vision-proto`, plus `vision-daemon` bin) — builds, lints (`clippy -D warnings`), and tests clean locally
+- [x] Tauri scaffold in `shell/` (React+TS) — `npm run tauri build` verified locally, produces working `.msi`/`.exe` installers
+- [ ] CI workflow: build + lint + test matrix across `windows-latest` / `macos-latest` / `ubuntu-latest` — `.github/workflows/ci.yml` authored and its steps verified locally on Windows, but not yet run for real: **repo has no git remote yet**, so GitHub Actions has never executed. Leave unchecked until it's actually gone green on all 3 runners.
+- [x] Resolve `ARCHITECTURE.md` §9's open question with a short written decision (Kùzu vs. Memgraph, LanceDB, llama.cpp vs. ONNX) — one paragraph each, committed to `docs/` (§9.1)
+- [ ] Confirm an empty daemon binary builds and runs clean on all 3 CI runners — verified locally on Windows only (`vision-daemon.exe` builds and exits 0); macOS/Linux runners unverified until CI actually runs
 
 ### M1. Daemon Skeleton + Local API Gateway
 - [ ] Add gRPC dependency (`tonic`), define initial `.proto`: `IngestEvent`, `Query`, `Permissions`, `Audit` (stub messages, fixed responses)
@@ -59,7 +59,7 @@ Expand each into granular tasks here once the milestone before it is fully check
 
 Ideas, cleanups, or tasks that surface mid-work but aren't part of the current milestone. Capture them here instead of derailing what's in progress — triage into §2/§3 at the start of the next session.
 
-*(empty)*
+- Repo has no git remote yet, so `.github/workflows/ci.yml` has never actually run. Push to GitHub and confirm the matrix goes green on all 3 OSes before checking off M0's CI task/exit criteria for real.
 
 ## 5. How to Keep This File Honest
 
