@@ -151,8 +151,8 @@ Vision/
 
 | Store | Contents | Format | Notes |
 |---|---|---|---|
-| **Graph DB** | Nodes (documents, projects, people, concepts) with typed metadata; edges (`cites`, `relates-to`, `authored-by`, `used-in`) | Memgraph (or Kùzu for a lighter embedded footprint in MVP) | Source of truth for structured relationships; queried via graph traversal for `5.3`/`5.6` features |
-| **Vector Index** | Chunk-level embeddings + pointer to blob + graph node ID | LanceDB or equivalent embedded ANN index | Powers semantic/fuzzy matching in hybrid search (`5.5`) |
+| **Graph DB** | Nodes (documents, projects, people, concepts) with typed metadata; edges (`cites`, `relates-to`, `authored-by`, `used-in`) | Kùzu (embedded; see §9.1) | Source of truth for structured relationships; queried via graph traversal for `5.3`/`5.6` features |
+| **Vector Index** | Chunk-level embeddings + pointer to blob + graph node ID | LanceDB (see §9.1) | Powers semantic/fuzzy matching in hybrid search (`5.5`) |
 | **Blob Store** | Extracted plain text, OCR output — never the original files themselves | Content-addressed flat files (SHA-256 keyed) | Vision indexes derived text, not copies of user files, to minimize duplication; original files stay wherever the user put them and are re-read/re-extracted on change |
 | **config.sqlite** | Folder/app permission grants, feature flags, sync preferences, install token | SQLite | Small, transactional, needs ACID guarantees for permission toggles |
 | **audit.sqlite** | One row per indexed item: source type, path/URL, timestamp, graph node ID | SQLite, append-only + soft-delete | Backs the "view what Vision has indexed / delete items or time ranges" requirement (`5.7`) |
@@ -206,6 +206,13 @@ Target latency: <2s for 90% of queries (PRD 7.3)
 
 ## 9. Open Questions
 
-- **Graph DB choice for MVP:** Memgraph (server-like local process, richer Cypher support) vs. Kùzu (true embedded library, simpler deployment, less mature ecosystem). Recommend starting with Kùzu for Phase 1 MVP simplicity, revisiting Memgraph if traversal performance at 100K+ nodes (PRD 7.3) demands it.
+### 9.1 Decided (M0)
+
+- **Graph DB: Kùzu.** Chosen over Memgraph for the MVP because it's a true embedded library — no separate server process or lifecycle to manage, which fits the single-daemon "one writer owns storage" principle in §7 more directly than Memgraph's server-like local process model. Its Cypher subset covers the traversal patterns needed through M9 (a few hops for entity/relationship queries), and it embeds cleanly from Rust. Revisit only if profiling at PRD-scale load (100K+ nodes / 500K+ edges, §7.3, exercised in M11) shows traversal latency missing the <2s p90 query target — Memgraph is the documented fallback, not a live option today.
+- **Vector Index: LanceDB.** Chosen over Faiss/hnswlib because it's embeddable (no server process, same constraint as above), stores vectors in an on-disk columnar format, and supports incremental upsert/delete — Faiss and hnswlib require a full index rebuild to remove a vector, which would break the coordinated-delete guarantee in §5.3. It has first-class Rust bindings. At the PRD's target scale, LanceDB's IVF-PQ index should comfortably clear the ANN portion of the <2s p90 query budget once combined with graph traversal; if it doesn't, that's an M6/M11 finding, not a re-litigation of this choice.
+- **Local LLM Runtime: llama.cpp.** Chosen over ONNX Runtime as the primary generation/embedding backend because the target model family (Llama 3 / Mistral-class instruct models, GGUF-quantized) has first-class, actively maintained support there, and GGUF quantization (Q4_K_M and similar) hits the <500MB idle RAM / commodity-CPU targets in §7.3 more reliably than typical ONNX fp16/int8 exports of the same models. This isn't exclusive: the Local LLM Runtime service (§3) treats model backend as pluggable per-model, so ONNX stays a live option for the embedding model or STT (M14) if a given model ships better-optimized ONNX weights than GGUF.
+
+### 9.2 Still Open
+
 - **Cross-device sync conflict resolution:** not yet specified — needed once the premium tier's cloud sync (PRD 5.7, Phase 2) supports multiple devices per user.
 - **Browser extension content capture depth:** full page text vs. title/URL-only by default, given privacy sensitivity — needs a product decision, not just an engineering one.
