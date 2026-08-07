@@ -19,17 +19,17 @@ This is the build plan for Vision and the process we follow while executing it. 
 - [x] Initialize repo structure: `daemon/` (Rust), `shell/` (Tauri UI), `extension/` (browser), `docs/` (PRD, ARCHITECTURE, ROADMAP)
 - [x] Set up Cargo workspace for daemon + shared crates
 - [x] Set up Tauri project for Tray App / Query UI
-- [ ] CI: build + lint + test on Windows/macOS/Linux runners — workflow authored (`.github/workflows/ci.yml`), equivalent steps verified locally on Windows; not yet run on GitHub because the repo has no remote yet
+- [x] CI: build + lint + test on Windows/macOS/Linux runners — `.github/workflows/ci.yml` ran for real on GitHub Actions (run [30762809939](https://github.com/anikethadapa24-crypto/vision/actions/runs/30762809939)), all 6 matrix jobs (daemon×3, shell×3) green
 - [x] Decide and pin: embedded graph DB (Kùzu per `ARCHITECTURE.md` §9.1), embedded vector index (LanceDB), local LLM runtime (`llama.cpp`, ONNX as pluggable fallback)
 - **Depends on:** —
-- **Exit Criteria:** `cargo build` and `tauri build` succeed on all 3 target OSes in CI; empty daemon binary runs and exits cleanly. **Not yet met** — Windows verified locally, but "in CI on all 3 OSes" needs a remote to actually execute `ci.yml`.
+- **Exit Criteria:** `cargo build` and `tauri build` succeed on all 3 target OSes in CI; empty daemon binary runs and exits cleanly. **Met** — CI run 30762809939, all 6 matrix jobs passed.
 - **Maps to:** §7 (Process & Deployment Topology)
 
 ### M1. Daemon Skeleton + Local API Gateway
 - [ ] Daemon process with autostart registration stub (Windows Service / launchd / systemd — registration only, no logic yet)
 - [ ] Single-instance lock file (per ARCHITECTURE.md §7 "Single writer" principle)
 - [ ] Local API Gateway: gRPC server over UDS (macOS/Linux) / named pipe (Windows)
-- [ ] Define `.proto` contracts for `IngestEvent`, `Query`, `Permissions`, `Audit` (stubs returning fixed responses)
+- [x] Define `.proto` contracts for `IngestEvent`, `Query`, `Permissions`, `Audit` (stubs returning fixed responses) — `vision-proto` (tonic/prost, vendored `protoc`), fixed-response impl in `vision-core::VisionApiService`, round-tripped over real gRPC (loopback TCP, not yet the production UDS/named-pipe transport) in 8 passing tests
 - [ ] Tray App connects to daemon, shows connection status in tray icon
 - **Depends on:** M0
 - **Exit Criteria:** Tray App shows "connected" against a running daemon; killing/restarting the daemon is handled gracefully by the client (reconnect, not crash).

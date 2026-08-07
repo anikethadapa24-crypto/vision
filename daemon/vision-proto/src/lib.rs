@@ -1,14 +1,5 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Generated gRPC types and service traits for the Local API Gateway.
+//! See `proto/vision.proto` for the source contract and
+//! docs/ARCHITECTURE.md §4.2 for the design rationale.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+tonic::include_proto!("vision.v1");

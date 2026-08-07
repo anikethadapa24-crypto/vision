@@ -16,22 +16,12 @@ No task is checked off until all of these are true, not just "code written":
 
 If a task can't clear this bar in one sitting, it's too big — split it before starting, don't lower the bar.
 
-## 2. Right Now — Immediate Queue (Phase 0 → ROADMAP.md M0–M2)
+## 2. Right Now — Immediate Queue (Phase 0 → ROADMAP.md M1–M2)
 
 Pull from the top. Nothing below M2 is expanded yet — see §3.
 
-### M0. Repo & Tooling Bootstrap
-- [x] Create repo skeleton: `daemon/`, `shell/`, `extension/`, `docs/`
-- [x] Move `PRD.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `UI.SPEC.md`, `TASKS.md` into `docs/`
-- [x] `git init`, initial commit, `.gitignore` for Rust/Node/Tauri build artifacts
-- [x] Cargo workspace: `daemon/Cargo.toml` + crate skeleton (`vision-core`, `vision-proto`, plus `vision-daemon` bin) — builds, lints (`clippy -D warnings`), and tests clean locally
-- [x] Tauri scaffold in `shell/` (React+TS) — `npm run tauri build` verified locally, produces working `.msi`/`.exe` installers
-- [ ] CI workflow: build + lint + test matrix across `windows-latest` / `macos-latest` / `ubuntu-latest` — `.github/workflows/ci.yml` authored and its steps verified locally on Windows, but not yet run for real: **repo has no git remote yet**, so GitHub Actions has never executed. Leave unchecked until it's actually gone green on all 3 runners.
-- [x] Resolve `ARCHITECTURE.md` §9's open question with a short written decision (Kùzu vs. Memgraph, LanceDB, llama.cpp vs. ONNX) — one paragraph each, committed to `docs/` (§9.1)
-- [ ] Confirm an empty daemon binary builds and runs clean on all 3 CI runners — verified locally on Windows only (`vision-daemon.exe` builds and exits 0); macOS/Linux runners unverified until CI actually runs
-
 ### M1. Daemon Skeleton + Local API Gateway
-- [ ] Add gRPC dependency (`tonic`), define initial `.proto`: `IngestEvent`, `Query`, `Permissions`, `Audit` (stub messages, fixed responses)
+- [x] Add gRPC dependency (`tonic`), define initial `.proto`: `IngestEvent`, `Query`, `Permissions`, `Audit` (stub messages, fixed responses) — `daemon/vision-proto/proto/vision.proto` + `tonic-prost-build` codegen (vendored `protoc` via `protoc-bin-vendored`, so no system package needed on any CI runner); `VisionApiService` in `daemon/vision-core/src/service.rs` implements all 7 RPCs with fixed responses; verified with 5 unit tests plus 3 integration tests in `daemon/vision-core/tests/grpc_service.rs` that round-trip a real generated client against a real server over loopback TCP (real protobuf wire serialization, not in-process trait calls) — `cargo build/test/clippy -D warnings` all clean across the workspace. Loopback TCP is test-only scaffolding, not the production transport; that's the next two tasks (UDS / named pipe).
 - [ ] Implement UDS transport (macOS/Linux)
 - [ ] Implement named-pipe transport (Windows)
 - [ ] Single-instance lock file check on daemon startup (per `ARCHITECTURE.md` §7 "single writer" rule)

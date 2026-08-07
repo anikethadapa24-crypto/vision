@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+// Local API Gateway contract — the single entry point every client (tray app,
+// query UI, browser extension) talks to. See docs/ARCHITECTURE.md §4.2.
+//
+// M1 scope: message shapes and RPC signatures are final, but server-side
+// logic is a stub — every RPC returns a fixed response. Real persistence
+// lands in M2 (Permissions/Audit) and later milestones (Ingest/Query).
+package vision.v1;
+
+service VisionApi {
+  // Used by Watcher/extension to submit new activity for indexing.
+  rpc IngestEvent(IngestEventRequest) returns (IngestEventResponse);
+
+  // Used by Query UI/Voice for NL queries; streams partial answer tokens
+  // followed by a final source list.
+  rpc Query(QueryRequest) returns (stream AnswerChunk);
+
+  // Settings UI: folder/app permission scopes.
+  rpc GetPermissions(GetPermissionsRequest) returns (GetPermissionsResponse);
+  rpc SetPermission(SetPermissionRequest) returns (SetPermissionResponse);
+  rpc RevokePermission(RevokePermissionRequest) returns (RevokePermissionResponse);
+
+  // Settings UI: audit log / "forget this" actions.
+  rpc ListAudit(ListAuditRequest) returns (ListAuditResponse);
+  rpc DeleteAudit(DeleteAuditRequest) returns (DeleteAuditResponse);
+}
+
+// --- IngestEvent ---
+
+enum IngestSource {
+  INGEST_SOURCE_UNSPECIFIED = 0;
+  INGEST_SOURCE_FILESYSTEM = 1;
+  INGEST_SOURCE_BROWSER = 2;
+}
+
+message IngestEventRequest {
+  IngestSource source = 1;
+  string path_or_url = 2;
+  string content_ref = 3;
+}
+
+message IngestEventResponse {
+  string event_id = 1;
+  bool accepted = 2;
+}
+
+// --- Query ---
+
+message QueryRequest {
+  string text = 1;
+}
+
+message SourceRef {
+  string document_id = 1;
+  string path = 2;
+  int64 timestamp_unix_ms = 3;
+}
+
+message AnswerChunk {
+  string token = 1;
+  bool is_final = 2;
+  repeated SourceRef sources = 3;
+}
+
+// --- Permissions ---
+
+enum PermissionScopeType {
+  PERMISSION_SCOPE_TYPE_UNSPECIFIED = 0;
+  PERMISSION_SCOPE_TYPE_FOLDER = 1;
+  PERMISSION_SCOPE_TYPE_APP = 2;
+}
+
+message PermissionScope {
+  string path = 1;
+  PermissionScopeType scope_type = 2;
+  bool granted = 3;
+}
+
+message GetPermissionsRequest {}
+
+message GetPermissionsResponse {
+  repeated PermissionScope permissions = 1;
+}
+
+message SetPermissionRequest {
+  PermissionScope permission = 1;
+}
+
+message SetPermissionResponse {
+  bool success = 1;
+}
+
+message RevokePermissionRequest {
+  string path = 1;
+}
+
+message RevokePermissionResponse {
+  bool success = 1;
+}
+
+// --- Audit ---
+
+message AuditEntry {
+  string id = 1;
+  IngestSource source = 2;
+  string path = 3;
+  int64 indexed_at_unix_ms = 4;
+}
+
+message ListAuditRequest {}
+
+message ListAuditResponse {
+  repeated AuditEntry entries = 1;
+}
+
+message DeleteAuditRequest {
+  string id = 1;
+}
+
+message DeleteAuditResponse {
+  bool success = 1;
+}

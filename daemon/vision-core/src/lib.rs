@@ -1,14 +1,9 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Core in-daemon logic shared across the API surface.
+//!
+//! `service` implements the M1 stub `VisionApi` gRPC service — fixed
+//! responses, no persistence. Real logic replaces it milestone by
+//! milestone starting with Permissions/Audit in M2 (`docs/TASKS.md`).
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod service;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use service::VisionApiService;
