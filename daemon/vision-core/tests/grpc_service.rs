@@ -20,8 +20,8 @@ use tonic::Request;
 use vision_core::VisionApiService;
 use vision_proto::vision_api_client::VisionApiClient;
 use vision_proto::{
-    DeleteAuditRequest, GetPermissionsRequest, IngestEventRequest, ListAuditRequest,
-    QueryRequest, RevokePermissionRequest, SetPermissionRequest,
+    DeleteAuditRequest, GetPermissionsRequest, IngestEventRequest, ListAuditRequest, QueryRequest,
+    RevokePermissionRequest, SetPermissionRequest,
 };
 
 /// Starts the stub service on an OS-assigned loopback port and returns a

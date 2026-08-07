@@ -6,13 +6,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _instance_lock = match single_instance::acquire(&data_dir) {
         Ok(lock) => lock,
         Err(single_instance::AcquireError::AlreadyRunning) => {
-            eprintln!("vision-daemon: {}", single_instance::AcquireError::AlreadyRunning);
+            eprintln!(
+                "vision-daemon: {}",
+                single_instance::AcquireError::AlreadyRunning
+            );
             std::process::exit(1);
         }
         Err(err) => return Err(Box::new(err) as Box<dyn std::error::Error>),
     };
 
-    eprintln!("vision-daemon: starting, listening on {}", pipe_description());
+    eprintln!(
+        "vision-daemon: starting, listening on {}",
+        pipe_description()
+    );
 
     vision_daemon::serve(shutdown_signal()).await?;
 

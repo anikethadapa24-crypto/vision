@@ -32,7 +32,10 @@ pub fn base_data_dir() -> PathBuf {
             return PathBuf::from(xdg_data_home).join("vision");
         }
         let home = env::var_os("HOME").expect("$HOME is not set");
-        PathBuf::from(home).join(".local").join("share").join("vision")
+        PathBuf::from(home)
+            .join(".local")
+            .join("share")
+            .join("vision")
     }
 }
 

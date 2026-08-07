@@ -93,7 +93,10 @@ mod tests {
         drop(first);
 
         let second = acquire(&dir);
-        assert!(second.is_ok(), "lock should be free once the holder dropped");
+        assert!(
+            second.is_ok(),
+            "lock should be free once the holder dropped"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
