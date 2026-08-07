@@ -144,6 +144,7 @@ Vision/
 ├── models/           # cached LLM/embedding/STT model weights (.gguf, .onnx)
 ├── config.sqlite      # settings, folder/app permissions, sync state
 ├── audit.sqlite        # append-only log of indexed items (source, timestamp, path) for the Audit Log UI
+├── daemon.lock         # single-instance lock (§7); OS-level exclusive lock, empty file
 └── logs/              # daemon logs (rotated, no content bodies — metadata only)
 ```
 

@@ -4,6 +4,7 @@
 //! responses, no persistence. Real logic replaces it milestone by
 //! milestone starting with Permissions/Audit in M2 (`docs/TASKS.md`).
 
+pub mod paths;
 pub mod service;
 
 pub use service::VisionApiService;

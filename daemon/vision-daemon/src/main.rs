@@ -1,5 +1,17 @@
+use vision_daemon::single_instance;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let data_dir = vision_core::paths::base_data_dir();
+    let _instance_lock = match single_instance::acquire(&data_dir) {
+        Ok(lock) => lock,
+        Err(single_instance::AcquireError::AlreadyRunning) => {
+            eprintln!("vision-daemon: {}", single_instance::AcquireError::AlreadyRunning);
+            std::process::exit(1);
+        }
+        Err(err) => return Err(Box::new(err) as Box<dyn std::error::Error>),
+    };
+
     eprintln!("vision-daemon: starting, listening on {}", pipe_description());
 
     vision_daemon::serve(shutdown_signal()).await?;
