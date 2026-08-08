@@ -7,16 +7,16 @@ pub mod transport;
 
 use std::future::Future;
 
-use tonic::transport::Server;
-use vision_core::VisionApiService;
-use vision_proto::vision_api_server::VisionApiServer;
-
 /// Windows named-pipe transport. macOS/Linux (Unix domain socket) is the
 /// next task in `docs/TASKS.md` M1 and not yet implemented.
 #[cfg(windows)]
 pub async fn serve(
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> Result<(), tonic::transport::Error> {
+    use tonic::transport::Server;
+    use vision_core::VisionApiService;
+    use vision_proto::vision_api_server::VisionApiServer;
+
     let incoming = transport::windows::incoming(transport::windows::PIPE_NAME.to_string());
 
     Server::builder()
