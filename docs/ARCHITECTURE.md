@@ -213,6 +213,16 @@ Target latency: <2s for 90% of queries (PRD 7.3)
 - **Vector Index: LanceDB.** Chosen over Faiss/hnswlib because it's embeddable (no server process, same constraint as above), stores vectors in an on-disk columnar format, and supports incremental upsert/delete — Faiss and hnswlib require a full index rebuild to remove a vector, which would break the coordinated-delete guarantee in §5.3. It has first-class Rust bindings. At the PRD's target scale, LanceDB's IVF-PQ index should comfortably clear the ANN portion of the <2s p90 query budget once combined with graph traversal; if it doesn't, that's an M6/M11 finding, not a re-litigation of this choice.
 - **Local LLM Runtime: llama.cpp.** Chosen over ONNX Runtime as the primary generation/embedding backend because the target model family (Llama 3 / Mistral-class instruct models, GGUF-quantized) has first-class, actively maintained support there, and GGUF quantization (Q4_K_M and similar) hits the <500MB idle RAM / commodity-CPU targets in §7.3 more reliably than typical ONNX fp16/int8 exports of the same models. This isn't exclusive: the Local LLM Runtime service (§3) treats model backend as pluggable per-model, so ONNX stays a live option for the embedding model or STT (M14) if a given model ships better-optimized ONNX weights than GGUF.
 
+### 9.1a Current implementation reality (as of the M2–M7 prototype push)
+
+The decisions in §9.1 stand — Kùzu, LanceDB, and llama.cpp are still the target stack, not re-litigated here. But as of this session's work, none of the three heavy native dependencies are actually wired in yet; what's running today is a set of explicitly interim, SQLite-backed stand-ins, built to get a genuinely functional end-to-end engine (ingest → index → retrieve) working without the risk of multi-GB model downloads or unfamiliar native bindings inside one session:
+
+- **Graph DB row (§5.2):** a flat SQLite `documents` table (`daemon/vision-core/src/stores/graph.rs`), not Kùzu. No Folder node type, no typed edges (`cites`/`relates-to`/etc.), no `GetGraph` RPC.
+- **Vector Index row (§5.2):** a SQLite `chunks` table with vectors stored as raw `f32` BLOBs (`daemon/vision-core/src/stores/vectors.rs`), not LanceDB. Search is a brute-force cosine scan, not an ANN index — fine at prototype scale, explicitly not what meets the 100K+-node target in §7.3.
+- **Embedding Service (§3):** a deterministic hashing vectorizer (`daemon/vision-core/src/embed.rs`), not a local model hosted by llama.cpp. Real cosine-similarity math, but lexical (word-overlap) matching rather than true semantic matching. No Model Cache, no model download flow.
+
+`docs/TASKS.md` §4 (Parking Lot) tracks what each swap to the real stack needs. This note exists so this document doesn't quietly go stale relative to what's actually running — update or remove it once the real stack replaces these stand-ins, milestone by milestone (M4 for the graph DB, M6 for vectors/embedding).
+
 ### 9.2 Still Open
 
 - **Cross-device sync conflict resolution:** not yet specified — needed once the premium tier's cloud sync (PRD 5.7, Phase 2) supports multiple devices per user.

@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use vision_core::Engine;
 use vision_daemon::single_instance;
 
 #[tokio::main]
@@ -15,12 +18,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(err) => return Err(Box::new(err) as Box<dyn std::error::Error>),
     };
 
+    let engine = Arc::new(Engine::open(&data_dir)?);
+    let _watcher = vision_daemon::watcher::spawn(engine.clone());
+
     eprintln!(
         "vision-daemon: starting, listening on {}",
         pipe_description()
     );
 
-    vision_daemon::serve(shutdown_signal()).await?;
+    vision_daemon::serve(engine, shutdown_signal()).await?;
 
     eprintln!("vision-daemon: shut down cleanly");
     Ok(())

@@ -24,9 +24,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     let mut client = VisionApiClient::new(channel);
 
+    // Ingest reads real file content now (M2-M7), so this needs a real file
+    // to point at rather than a made-up path.
+    let scratch_dir = std::env::temp_dir().join("vision-client-example");
+    std::fs::create_dir_all(&scratch_dir)?;
+    let file_path = scratch_dir.join("manual-test.md");
+    std::fs::write(&file_path, "hello from examples/client.rs")?;
+
     let resp = client
         .ingest_event(Request::new(IngestEventRequest {
-            path_or_url: "C:\\scratch\\manual-test.md".to_string(),
+            path_or_url: file_path.to_string_lossy().to_string(),
             ..Default::default()
         }))
         .await?

@@ -1,4 +1,6 @@
+use std::path::PathBuf;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use tokio_stream::Stream;
 use tonic::{Request, Response, Status};
@@ -8,24 +10,65 @@ use vision_proto::{
     AnswerChunk, DeleteAuditRequest, DeleteAuditResponse, GetPermissionsRequest,
     GetPermissionsResponse, IngestEventRequest, IngestEventResponse, ListAuditRequest,
     ListAuditResponse, QueryRequest, RevokePermissionRequest, RevokePermissionResponse,
-    SetPermissionRequest, SetPermissionResponse,
+    SetPermissionRequest, SetPermissionResponse, SourceRef,
 };
 
-/// M1 stub implementation of the Local API Gateway contract
-/// (`docs/ARCHITECTURE.md` §4.2). Every RPC returns a fixed response — no
-/// storage is touched yet. Real persistence replaces this milestone by
-/// milestone, starting with Permissions/Audit in M2 (`docs/TASKS.md`).
-#[derive(Debug, Default)]
-pub struct VisionApiService;
+use crate::engine::Engine;
+use crate::{ingest, query};
+
+/// How many ranked results `Query` returns per request. Fixed for now —
+/// exposing it as a request field is a proto change with no caller today.
+const TOP_K: usize = 5;
+
+/// The real `VisionApi` gRPC service (`docs/ARCHITECTURE.md` §4.2). Every
+/// RPC is backed by `Engine` — see its module doc for what's real storage
+/// vs. an interim stand-in (`stores::graph`/`stores::vectors`/`embed`).
+#[derive(Clone)]
+pub struct VisionApiService {
+    engine: Arc<Engine>,
+}
+
+impl VisionApiService {
+    pub fn new(engine: Arc<Engine>) -> Self {
+        Self { engine }
+    }
+}
+
+/// Maps an internal storage/pipeline failure to a gRPC status. Every such
+/// failure is a server-side problem from the client's point of view (bad
+/// input either round-trips through `IngestSource`'s default-on-unknown
+/// behavior, or protobuf itself rejects unparseable request bytes before we
+/// ever see them) so `internal` is the right code across the board here.
+fn to_status<E: std::fmt::Display>(e: E) -> Status {
+    Status::internal(e.to_string())
+}
+
+async fn run_blocking<F, T>(f: F) -> Result<T, Status>
+where
+    F: FnOnce() -> crate::error::CoreResult<T> + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| Status::internal(format!("blocking task panicked: {e}")))?
+        .map_err(to_status)
+}
 
 #[tonic::async_trait]
 impl VisionApi for VisionApiService {
     async fn ingest_event(
         &self,
-        _request: Request<IngestEventRequest>,
+        request: Request<IngestEventRequest>,
     ) -> Result<Response<IngestEventResponse>, Status> {
+        let req = request.into_inner();
+        let engine = self.engine.clone();
+        let path = PathBuf::from(&req.path_or_url);
+        let source = req.source;
+
+        let outcome = run_blocking(move || ingest::run(&engine, &path, source)).await?;
+
         Ok(Response::new(IngestEventResponse {
-            event_id: "stub-event-id".to_string(),
+            event_id: outcome.audit_id,
             accepted: true,
         }))
     }
@@ -34,22 +77,33 @@ impl VisionApi for VisionApiService {
 
     async fn query(
         &self,
-        _request: Request<QueryRequest>,
+        request: Request<QueryRequest>,
     ) -> Result<Response<Self::QueryStream>, Status> {
-        let chunks = vec![
-            Ok(AnswerChunk {
-                token: "Vision can't answer yet — the Query Orchestrator lands in a later \
-                        milestone. This is a fixed stub response."
-                    .to_string(),
-                is_final: false,
-                sources: vec![],
-            }),
-            Ok(AnswerChunk {
-                token: String::new(),
-                is_final: true,
-                sources: vec![],
-            }),
-        ];
+        let text = request.into_inner().text;
+        let engine = self.engine.clone();
+
+        let results = run_blocking(move || query::run(&engine, &text, TOP_K)).await?;
+
+        let mut chunks: Vec<Result<AnswerChunk, Status>> = results
+            .into_iter()
+            .map(|r| {
+                Ok(AnswerChunk {
+                    token: r.snippet,
+                    is_final: false,
+                    sources: vec![SourceRef {
+                        document_id: r.document_id,
+                        path: r.path,
+                        timestamp_unix_ms: r.timestamp_unix_ms,
+                    }],
+                })
+            })
+            .collect();
+        chunks.push(Ok(AnswerChunk {
+            token: String::new(),
+            is_final: true,
+            sources: vec![],
+        }));
+
         let stream: Self::QueryStream = Box::pin(tokio_stream::iter(chunks));
         Ok(Response::new(stream))
     }
@@ -58,24 +112,30 @@ impl VisionApi for VisionApiService {
         &self,
         _request: Request<GetPermissionsRequest>,
     ) -> Result<Response<GetPermissionsResponse>, Status> {
-        // Opt-in by default (UI.SPEC.md §5b/§5c): nothing is granted until
-        // M2 wires this to config.sqlite.
-        Ok(Response::new(GetPermissionsResponse {
-            permissions: vec![],
-        }))
+        let engine = self.engine.clone();
+        let permissions = run_blocking(move || engine.config.list()).await?;
+        Ok(Response::new(GetPermissionsResponse { permissions }))
     }
 
     async fn set_permission(
         &self,
-        _request: Request<SetPermissionRequest>,
+        request: Request<SetPermissionRequest>,
     ) -> Result<Response<SetPermissionResponse>, Status> {
+        let Some(scope) = request.into_inner().permission else {
+            return Err(Status::invalid_argument("permission is required"));
+        };
+        let engine = self.engine.clone();
+        run_blocking(move || engine.config.set(&scope)).await?;
         Ok(Response::new(SetPermissionResponse { success: true }))
     }
 
     async fn revoke_permission(
         &self,
-        _request: Request<RevokePermissionRequest>,
+        request: Request<RevokePermissionRequest>,
     ) -> Result<Response<RevokePermissionResponse>, Status> {
+        let path = request.into_inner().path;
+        let engine = self.engine.clone();
+        run_blocking(move || engine.config.revoke(&path)).await?;
         Ok(Response::new(RevokePermissionResponse { success: true }))
     }
 
@@ -83,13 +143,18 @@ impl VisionApi for VisionApiService {
         &self,
         _request: Request<ListAuditRequest>,
     ) -> Result<Response<ListAuditResponse>, Status> {
-        Ok(Response::new(ListAuditResponse { entries: vec![] }))
+        let engine = self.engine.clone();
+        let entries = run_blocking(move || engine.audit.list()).await?;
+        Ok(Response::new(ListAuditResponse { entries }))
     }
 
     async fn delete_audit(
         &self,
-        _request: Request<DeleteAuditRequest>,
+        request: Request<DeleteAuditRequest>,
     ) -> Result<Response<DeleteAuditResponse>, Status> {
+        let id = request.into_inner().id;
+        let engine = self.engine.clone();
+        run_blocking(move || engine.audit.soft_delete(&id)).await?;
         Ok(Response::new(DeleteAuditResponse { success: true }))
     }
 }
@@ -98,40 +163,85 @@ impl VisionApi for VisionApiService {
 mod tests {
     use super::*;
     use tokio_stream::StreamExt;
+    use vision_proto::{IngestSource, PermissionScope, PermissionScopeType};
+
+    fn test_service() -> (VisionApiService, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::open(&dir.path().join("data")).unwrap();
+        (VisionApiService::new(Arc::new(engine)), dir)
+    }
 
     #[tokio::test]
-    async fn ingest_event_returns_fixed_accepted_response() {
-        let svc = VisionApiService;
+    async fn ingest_event_indexes_a_real_file_and_returns_an_audit_id() {
+        let (svc, dir) = test_service();
+        let file_path = dir.path().join("note.md");
+        std::fs::write(&file_path, "hello from a real file").unwrap();
+
         let resp = svc
-            .ingest_event(Request::new(IngestEventRequest::default()))
+            .ingest_event(Request::new(IngestEventRequest {
+                source: IngestSource::Filesystem as i32,
+                path_or_url: file_path.to_string_lossy().to_string(),
+                content_ref: String::new(),
+            }))
             .await
             .unwrap()
             .into_inner();
+
         assert!(resp.accepted);
         assert!(!resp.event_id.is_empty());
     }
 
     #[tokio::test]
     async fn query_stream_ends_with_a_final_chunk() {
-        let svc = VisionApiService;
+        let (svc, _dir) = test_service();
         let stream = svc
-            .query(Request::new(QueryRequest::default()))
+            .query(Request::new(QueryRequest {
+                text: "anything".to_string(),
+            }))
             .await
             .unwrap()
             .into_inner();
         let chunks: Vec<AnswerChunk> = stream.collect::<Result<Vec<_>, _>>().await.unwrap();
 
-        assert_eq!(chunks.len(), 2);
-        assert!(!chunks[0].is_final);
-        assert!(!chunks[0].token.is_empty());
-        assert!(chunks[1].is_final);
+        assert!(chunks.last().unwrap().is_final);
     }
 
     #[tokio::test]
-    async fn get_permissions_is_empty_until_m2_wires_persistence() {
-        let svc = VisionApiService;
+    async fn query_after_ingest_surfaces_the_indexed_file_with_a_citation() {
+        let (svc, dir) = test_service();
+        let file_path = dir.path().join("cats.md");
+        std::fs::write(&file_path, "cats are wonderful small mammals").unwrap();
+
+        svc.ingest_event(Request::new(IngestEventRequest {
+            source: IngestSource::Filesystem as i32,
+            path_or_url: file_path.to_string_lossy().to_string(),
+            content_ref: String::new(),
+        }))
+        .await
+        .unwrap();
+
+        let stream = svc
+            .query(Request::new(QueryRequest {
+                text: "tell me about cats".to_string(),
+            }))
+            .await
+            .unwrap()
+            .into_inner();
+        let chunks: Vec<AnswerChunk> = stream.collect::<Result<Vec<_>, _>>().await.unwrap();
+
+        let cited_paths: Vec<String> = chunks
+            .iter()
+            .flat_map(|c| c.sources.iter())
+            .map(|s| s.path.clone())
+            .collect();
+        assert!(cited_paths.iter().any(|p| p.ends_with("cats.md")));
+    }
+
+    #[tokio::test]
+    async fn get_permissions_is_empty_before_anything_is_granted() {
+        let (svc, _dir) = test_service();
         let resp = svc
-            .get_permissions(Request::new(GetPermissionsRequest::default()))
+            .get_permissions(Request::new(GetPermissionsRequest {}))
             .await
             .unwrap()
             .into_inner();
@@ -139,40 +249,81 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn set_and_revoke_permission_report_fixed_success() {
-        let svc = VisionApiService;
+    async fn set_then_get_then_revoke_permission_round_trips_for_real() {
+        let (svc, _dir) = test_service();
 
         let set = svc
-            .set_permission(Request::new(SetPermissionRequest::default()))
+            .set_permission(Request::new(SetPermissionRequest {
+                permission: Some(PermissionScope {
+                    path: "C:\\notes".to_string(),
+                    scope_type: PermissionScopeType::Folder as i32,
+                    granted: true,
+                }),
+            }))
             .await
             .unwrap()
             .into_inner();
         assert!(set.success);
 
+        let listed = svc
+            .get_permissions(Request::new(GetPermissionsRequest {}))
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!(listed.permissions.len(), 1);
+        assert_eq!(listed.permissions[0].path, "C:\\notes");
+
         let revoke = svc
-            .revoke_permission(Request::new(RevokePermissionRequest::default()))
+            .revoke_permission(Request::new(RevokePermissionRequest {
+                path: "C:\\notes".to_string(),
+            }))
             .await
             .unwrap()
             .into_inner();
         assert!(revoke.success);
-    }
 
-    #[tokio::test]
-    async fn list_audit_is_empty_and_delete_reports_fixed_success() {
-        let svc = VisionApiService;
-
-        let list = svc
-            .list_audit(Request::new(ListAuditRequest::default()))
+        let listed_after = svc
+            .get_permissions(Request::new(GetPermissionsRequest {}))
             .await
             .unwrap()
             .into_inner();
-        assert!(list.entries.is_empty());
+        assert!(listed_after.permissions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_audit_reflects_real_ingests_and_delete_soft_deletes() {
+        let (svc, dir) = test_service();
+        let file_path = dir.path().join("note.md");
+        std::fs::write(&file_path, "some content").unwrap();
+
+        svc.ingest_event(Request::new(IngestEventRequest {
+            source: IngestSource::Filesystem as i32,
+            path_or_url: file_path.to_string_lossy().to_string(),
+            content_ref: String::new(),
+        }))
+        .await
+        .unwrap();
+
+        let list = svc
+            .list_audit(Request::new(ListAuditRequest {}))
+            .await
+            .unwrap()
+            .into_inner();
+        assert_eq!(list.entries.len(), 1);
+        let entry_id = list.entries[0].id.clone();
 
         let delete = svc
-            .delete_audit(Request::new(DeleteAuditRequest::default()))
+            .delete_audit(Request::new(DeleteAuditRequest { id: entry_id }))
             .await
             .unwrap()
             .into_inner();
         assert!(delete.success);
+
+        let list_after = svc
+            .list_audit(Request::new(ListAuditRequest {}))
+            .await
+            .unwrap()
+            .into_inner();
+        assert!(list_after.entries.is_empty());
     }
 }

@@ -36,12 +36,12 @@ This is the build plan for Vision and the process we follow while executing it. 
 - **Maps to:** §3 (API Gateway), §4.1–4.2 (transport + contract)
 
 ### M2. Config, Permissions & Audit Stores
-- [ ] `config.sqlite` schema: folder/app permission grants, feature flags, install token
-- [ ] `audit.sqlite` schema: append-only indexed-item log with soft-delete
-- [ ] Permissions UI in Tray App settings: pick folders to index, grant/revoke
-- [ ] `Permissions.{Get,Set,Revoke}` and `Audit.{List,Delete}` RPCs implemented for real (no more stubs)
+- [x] `config.sqlite` schema: folder/app permission grants, feature flags, install token — grants only so far (feature flags/install token not needed by anything yet); no versioned migration path yet, see `docs/TASKS.md` §4
+- [x] `audit.sqlite` schema: append-only indexed-item log with soft-delete
+- [ ] ~~Permissions UI in Tray App settings~~ — **not built this session**, explicit scope decision to prioritize engine depth over `shell/` UI work; `examples/repl.rs` is the stand-in. See `docs/TASKS.md` §2 M2.
+- [x] `Permissions.{Get,Set,Revoke}` and `Audit.{List,Delete}` RPCs implemented for real (no more stubs)
 - **Depends on:** M1
-- **Exit Criteria:** User can grant a folder in the UI, see it persisted after daemon restart, and revoke it; audit log page lists entries (empty at this stage) without erroring.
+- **Exit Criteria:** User can grant a folder in the UI, see it persisted after daemon restart, and revoke it; audit log page lists entries (empty at this stage) without erroring. **Engine half met, UI half not** — verified via the REPL client instead of a UI: granted a real folder, restarted `vision-daemon.exe`, confirmed the grant persisted, revoked it, confirmed it was gone; audit log lists real entries without erroring.
 - **Maps to:** §5.2 (config.sqlite, audit.sqlite), §5.3 (deletion coordination groundwork)
 
 ---
@@ -49,44 +49,44 @@ This is the build plan for Vision and the process we follow while executing it. 
 ## Phase 1 — MVP (target: PRD §11 Phase 1, Months 1–4)
 
 ### M3. Filesystem Watcher + Blob Store
-- [ ] Platform watchers wired (`ReadDirectoryChangesW` / `FSEvents` / `inotify`) scoped to permitted folders from M2
-- [ ] `IngestEvent` fires on create/modify/delete
-- [ ] Content-addressed Blob Store (`blobs/`, SHA-256 keyed) — raw bytes in, for now no extraction
-- [ ] Resource throttling stub: pause watcher callbacks under high CPU (basic, refine in M11)
+- [x] Platform watchers wired scoped to permitted folders from M2 — Windows verified (`notify` crate over `ReadDirectoryChangesW`); macOS/Linux use the same crate/code path but are unverified on those OSes, same caveat as M1's transport work
+- [ ] ~~`IngestEvent` fires on create/modify/delete~~ — create/modify only; delete detection not implemented, see `docs/TASKS.md` §4
+- [x] Content-addressed Blob Store (`blobs/`, SHA-256 keyed) — raw bytes in, for now no extraction
+- [ ] Resource throttling stub — **not implemented at all**, not even the basic stub originally scoped here
 - **Depends on:** M2
-- **Exit Criteria:** Saving a file in a permitted folder produces a blob within 5s; audit log records the event.
+- **Exit Criteria:** Saving a file in a permitted folder produces a blob within 5s; audit log records the event. **Met** — verified manually end-to-end (granted folder → wrote real file → daemon log confirmed indexing → `ListAudit` showed the entry).
 - **Maps to:** §6.1 Flow A (first half)
 
 ### M4. Embedded Graph DB Integration
-- [ ] Stand up Kùzu inside the daemon; define initial schema: `Document` node type, `indexed-in` edge to a `Folder`/`Source` node
-- [ ] On ingest, upsert a `Document` node referencing its blob hash
-- [ ] `GetGraph(scope)` RPC returns real data (even if just flat document lists at this stage)
+- [ ] ~~Stand up Kùzu inside the daemon~~ — **interim SQLite stand-in instead** (`daemon/vision-core/src/stores/graph.rs`): a flat `documents` table, no Folder node type, no typed edges. Real Kùzu integration deferred, see `docs/TASKS.md` §4 for what the swap needs.
+- [x] On ingest, upsert a `Document` node referencing its blob hash — against the stand-in; deterministic id per path so re-ingest upserts rather than duplicates
+- [ ] `GetGraph(scope)` RPC — not added to the `.proto`; nothing consumes it yet (no graph visualizer UI)
 - **Depends on:** M3
-- **Exit Criteria:** Indexing 100 files produces 100 correctly-linked graph nodes, queryable via `GetGraph`.
+- **Exit Criteria:** Indexing 100 files produces 100 correctly-linked graph nodes, queryable via `GetGraph`. **Node creation half met** (unit-tested, manually verified); **`GetGraph` half not met** — RPC doesn't exist yet.
 - **Maps to:** §5.2 (Graph DB row), §6.1 Flow A (graph write step)
 
 ### M5. Text Extraction Pipeline
-- [ ] Extractors: plain text, PDF, Markdown, code files first (Word/Google Docs, Jupyter, OCR deferred to a later pass in this milestone if time allows, else M9)
-- [ ] Extracted text written to Blob Store alongside raw bytes
-- [ ] Chunking strategy defined (size + overlap) for downstream embedding
+- [x] Extractors: plain text, PDF, Markdown, code files — PDF via the pure-Rust `pdf-extract` crate landed cleanly (no native/C dependency), so it shipped now rather than being deferred as originally hedged; Word/Google Docs, Jupyter, OCR still deferred to M9 as planned
+- [x] Extracted text written to Blob Store alongside raw bytes
+- [x] Chunking strategy defined (size + overlap) for downstream embedding — fixed-size sliding window over chars (not bytes — never splits multi-byte UTF-8), 800/100 default
 - **Depends on:** M3
-- **Exit Criteria:** For each supported file type, extracted-text blob exists and is readable; unsupported types degrade gracefully (indexed as metadata-only, not crash).
+- **Exit Criteria:** For each supported file type, extracted-text blob exists and is readable; unsupported types degrade gracefully (indexed as metadata-only, not crash). **Met** — covered by unit + integration tests.
 - **Maps to:** §6.1 Flow A (extraction step)
 
 ### M6. Local LLM Runtime + Embedding + Vector Index
-- [ ] Model Cache directory + first-run model download flow (embedding model first; generation model can follow)
-- [ ] Embedding Service generates vectors for chunks from M5
-- [ ] LanceDB vector index stores chunk embedding + blob pointer + graph node ID
+- [ ] ~~Model Cache directory + first-run model download flow~~ — **deferred**, no model download flow exists
+- [x] Embedding Service generates vectors for chunks from M5 — **interim hashing-vectorizer stand-in** (`daemon/vision-core/src/embed.rs`) in place of a real local embedding model: deterministic, real cosine-similarity math, lexical (word-overlap) rather than true semantic matching. See `docs/TASKS.md` §4 for what swapping in a real model needs.
+- [x] LanceDB vector index stores chunk embedding + blob pointer + graph node ID — **interim SQLite stand-in** (`daemon/vision-core/src/stores/vectors.rs`): brute-force cosine scan, not an ANN index; explicitly doesn't meet the PRD §7.3 100K+-node target (M11's benchmark will catch that when it matters).
 - **Depends on:** M4, M5
-- **Exit Criteria:** After indexing, a raw cosine-similarity query against the vector index returns sane nearest neighbors for a known test query.
+- **Exit Criteria:** After indexing, a raw cosine-similarity query against the vector index returns sane nearest neighbors for a known test query. **Met** on the stand-in — unit-tested and manually verified via M7's end-to-end run below.
 - **Maps to:** §3 (Embedding Service, LLM Runtime), §5.2 (Vector Index row)
 
 ### M7. Query Orchestrator v1 — Retrieval Only
-- [ ] Hotkey opens Query UI; text input wired to `Query()` RPC
-- [ ] Orchestrator: embed query → ANN search → return ranked source list (paths + snippets, **no LLM synthesis yet**)
-- [ ] Query UI renders results list with file path + snippet + timestamp
+- [ ] ~~Hotkey opens Query UI; text input wired to `Query()` RPC~~ — **not built**, same session-scope decision as M1/M2's UI items; `examples/repl.rs` choice `2` is the stand-in
+- [x] Orchestrator: embed query → ANN search → return ranked source list (paths + snippets, **no LLM synthesis yet**) — `daemon/vision-core/src/query.rs`, `Query` RPC streams real ranked, cited results
+- [ ] ~~Query UI renders results list~~ — not built, no UI this session
 - **Depends on:** M6
-- **Exit Criteria:** Typing a query about a previously-indexed file surfaces it in the results within 2s.
+- **Exit Criteria:** Typing a query about a previously-indexed file surfaces it in the results within 2s. **Met on the engine side**, verified manually end-to-end via the REPL client (not a hotkey/UI): granted a folder, let the watcher index a real file about photosynthesis, queried "how do plants make energy from sunlight," got that file back as the top result with its real path and a real snippet — not the old fixed stub.
 - **Maps to:** §6.2 Flow B (first half), §5.4 (query UI, minus synthesis)
 
 ### M8. Answer Synthesis + Source Attribution

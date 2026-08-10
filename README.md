@@ -4,7 +4,7 @@
 
 Vision is a desktop utility (Windows/macOS/Linux) that runs quietly in the background, continuously turning your files, browser activity, and app usage into a queryable, interconnected knowledge graph. Hit a hotkey or say "Hey Vision," ask a question in plain English, and get an answer synthesized from everything you've ever worked on — with sources cited.
 
-> **Status: pre-code, docs-first.** This repo currently contains the product and engineering specs only. No daemon, UI, or extension code exists yet — see [Current Status](#current-status) below before assuming anything here is running.
+> **Status: functional prototype engine, no UI yet.** The daemon really ingests files, indexes them, and answers queries with real (not fixed-stub) cited results — driven today through a REPL client, not the Tray App/Query UI, which are still unbuilt. See [Current Status](#current-status) below for exactly what's real versus an interim stand-in.
 
 ## Why
 
@@ -54,9 +54,11 @@ Full rationale for each of these lives in `ARCHITECTURE.md` §1 and `UI.SPEC.md`
 
 ## Current Status
 
-Following `ROADMAP.md`'s phase plan, we're at **Phase 0, Milestone M0 (Repo & Tooling Bootstrap)** — not yet started. `TASKS.md` §2 has the granular breakdown of exactly what that means: repo skeleton, CI, and resolving the remaining open architecture decisions before any daemon code is written.
+Following `ROADMAP.md`'s phase plan, M0 and M1's transport/persistence layer are done; M2 through M7 (retrieval, no LLM synthesis yet) are functionally working end to end, driven through a REPL client rather than the Tray App/Query UI, which haven't been built yet. `TASKS.md` §2 has the exact granular state milestone by milestone — what's real, what's an interim stand-in, and what's still missing.
 
-There is no build to run yet. Once M0–M1 land, this section will be replaced with real setup and run instructions — until then, treat any "getting started" steps you see elsewhere as aspirational, not functional.
+**What actually runs today:** `cargo run -p vision-daemon` starts the daemon; `cargo run -p vision-daemon --example repl` in a second terminal drives it — grant a real folder, let the watcher (or an explicit `IngestEvent`) index a real file, then query it back and get a real ranked, cited snippet, not a fixed stub. Permissions and audit history persist across daemon restarts (`config.sqlite`/`audit.sqlite`/`graph.sqlite`/`vectors.sqlite` under `%LOCALAPPDATA%\Vision\` on Windows).
+
+**What's an interim stand-in, not the real thing yet:** the graph DB and vector index are SQLite tables, not Kùzu/LanceDB; the embedding model is a deterministic hashing vectorizer (lexical matching), not a local neural model. `ARCHITECTURE.md` §9.1a and `TASKS.md` §4 spell out exactly what each stand-in is missing and what swapping in the real thing needs. There's no Tray App, no Query UI, no answer synthesis (M8) yet, and macOS/Linux are unverified (Windows-only transport + watcher testing so far).
 
 ## Contributing / Working on This
 
