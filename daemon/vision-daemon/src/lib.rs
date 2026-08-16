@@ -2,6 +2,7 @@
 //! transport (`docs/ARCHITECTURE.md` §4.1) and serves `VisionApiService`
 //! until asked to shut down.
 
+pub mod http_bridge;
 pub mod single_instance;
 pub mod transport;
 pub mod watcher;

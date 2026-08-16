@@ -13,6 +13,7 @@ pub mod embed;
 pub mod engine;
 pub mod error;
 pub mod extract;
+pub mod graph_query;
 pub mod ids;
 pub mod ingest;
 pub mod llm;

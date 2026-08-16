@@ -7,14 +7,15 @@ use tonic::{Request, Response, Status};
 
 use vision_proto::vision_api_server::VisionApi;
 use vision_proto::{
-    AnswerChunk, DeleteAuditRequest, DeleteAuditResponse, GetPermissionsRequest,
-    GetPermissionsResponse, IngestEventRequest, IngestEventResponse, ListAuditRequest,
-    ListAuditResponse, QueryRequest, RevokePermissionRequest, RevokePermissionResponse,
-    SetPermissionRequest, SetPermissionResponse, SourceRef,
+    AnswerChunk, DeleteAuditRequest, DeleteAuditResponse, GetGraphRequest, GetGraphResponse,
+    GetPermissionsRequest, GetPermissionsResponse, GraphEdge, GraphNode, IngestEventRequest,
+    IngestEventResponse, IngestSource, ListAuditRequest, ListAuditResponse, QueryRequest,
+    RevokePermissionRequest, RevokePermissionResponse, SetPermissionRequest,
+    SetPermissionResponse, SourceRef,
 };
 
 use crate::engine::Engine;
-use crate::{ingest, query, synthesize};
+use crate::{graph_query, ingest, query, synthesize};
 
 /// How many ranked results `Query` returns per request. Fixed for now —
 /// exposing it as a request field is a proto change with no caller today.
@@ -67,10 +68,19 @@ impl VisionApi for VisionApiService {
     ) -> Result<Response<IngestEventResponse>, Status> {
         let req = request.into_inner();
         let engine = self.engine.clone();
-        let path = PathBuf::from(&req.path_or_url);
         let source = req.source;
 
-        let outcome = run_blocking(move || ingest::run(&engine, &path, source)).await?;
+        let outcome = if source == IngestSource::Browser as i32 {
+            // Browser capture hands over already-extracted page text
+            // (`content_ref`) rather than a path the daemon reads itself —
+            // see `ingest::run_browser`'s doc comment.
+            let url = req.path_or_url;
+            let text = req.content_ref;
+            run_blocking(move || ingest::run_browser(&engine, &url, source, text)).await?
+        } else {
+            let path = PathBuf::from(&req.path_or_url);
+            run_blocking(move || ingest::run(&engine, &path, source)).await?
+        };
 
         Ok(Response::new(IngestEventResponse {
             event_id: outcome.audit_id,
@@ -183,6 +193,34 @@ impl VisionApi for VisionApiService {
         let engine = self.engine.clone();
         run_blocking(move || engine.audit.soft_delete(&id)).await?;
         Ok(Response::new(DeleteAuditResponse { success: true }))
+    }
+
+    async fn get_graph(
+        &self,
+        _request: Request<GetGraphRequest>,
+    ) -> Result<Response<GetGraphResponse>, Status> {
+        let engine = self.engine.clone();
+        let (nodes, edges) = run_blocking(move || graph_query::run(&engine)).await?;
+
+        Ok(Response::new(GetGraphResponse {
+            nodes: nodes
+                .into_iter()
+                .map(|n| GraphNode {
+                    id: n.id,
+                    path: n.path,
+                    source: n.source,
+                    created_at_unix_ms: n.created_at_unix_ms,
+                })
+                .collect(),
+            edges: edges
+                .into_iter()
+                .map(|e| GraphEdge {
+                    from_id: e.from_id,
+                    to_id: e.to_id,
+                    weight: e.weight,
+                })
+                .collect(),
+        }))
     }
 }
 

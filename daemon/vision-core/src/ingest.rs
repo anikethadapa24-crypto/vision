@@ -22,14 +22,41 @@ pub struct IngestOutcome {
     pub chunks_indexed: usize,
 }
 
-/// `path` is always read from local disk today — the only source this
-/// prototype's watcher/REPL drive is `IngestSource::Filesystem`. Browser
-/// ingestion (M13) would extend this to accept `content_ref` text directly
-/// instead of reading from `path`.
+/// Reads `path` from local disk and extracts its text — the
+/// `IngestSource::Filesystem` path (watcher, REPL, manual `IngestEvent`).
 pub fn run(engine: &Engine, path: &Path, source: i32) -> CoreResult<IngestOutcome> {
     let path_str = path.to_string_lossy().to_string();
     let extracted = extract_text(path)?;
+    run_with_content(engine, &path_str, source, extracted)
+}
 
+/// The `IngestSource::Browser` path: `url` identifies the document (same
+/// role `path` plays for the filesystem case — a stable id for upsert, and
+/// what a source citation links back to) but `text` is already-extracted
+/// page content handed in directly, not read from disk. Real capture is the
+/// browser extension's job (`extension/background.js`); this is the
+/// daemon-side half of that pipeline.
+pub fn run_browser(
+    engine: &Engine,
+    url: &str,
+    source: i32,
+    text: String,
+) -> CoreResult<IngestOutcome> {
+    let extracted = if text.trim().is_empty() {
+        None
+    } else {
+        Some(text)
+    };
+    run_with_content(engine, url, source, extracted)
+}
+
+fn run_with_content(
+    engine: &Engine,
+    path_str: &str,
+    source: i32,
+    extracted: Option<String>,
+) -> CoreResult<IngestOutcome> {
+    let path_str = path_str.to_string();
     let blob_hash = match &extracted {
         Some(text) => Some(engine.blobs.write(text)?),
         None => None,

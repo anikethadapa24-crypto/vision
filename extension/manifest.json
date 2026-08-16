@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Vision",
+  "version": "0.1.0",
+  "description": "Indexes the pages you choose into your local Vision knowledge base.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage", "tabs", "scripting"],
+  "host_permissions": ["http://127.0.0.1:47823/*"],
+  "optional_host_permissions": ["<all_urls>"]
+}

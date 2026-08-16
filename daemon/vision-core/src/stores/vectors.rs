@@ -99,6 +99,43 @@ impl VectorStore {
         Ok(())
     }
 
+    /// Averages every chunk's vector per `document_id`, for the Graph
+    /// Explorer's similarity edges (`GetGraph` RPC) — a document-level
+    /// centroid rather than per-chunk, since the graph shows document
+    /// nodes, not chunk nodes. Not L2-renormalized after averaging: cosine
+    /// similarity is scale-invariant, so an unnormalized centroid compares
+    /// identically to a normalized one.
+    pub fn document_centroids(&self) -> CoreResult<Vec<(String, Vec<f32>)>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT document_id, vector FROM chunks")?;
+        let rows = stmt.query_map([], |row| {
+            let document_id: String = row.get(0)?;
+            let vector_bytes: Vec<u8> = row.get(1)?;
+            Ok((document_id, decode_vector(&vector_bytes)))
+        })?;
+
+        let mut sums: std::collections::HashMap<String, (Vec<f32>, usize)> =
+            std::collections::HashMap::new();
+        for row in rows {
+            let (document_id, vector) = row?;
+            let entry = sums
+                .entry(document_id)
+                .or_insert_with(|| (vec![0f32; vector.len()], 0));
+            for (i, v) in vector.iter().enumerate() {
+                entry.0[i] += v;
+            }
+            entry.1 += 1;
+        }
+
+        Ok(sums
+            .into_iter()
+            .map(|(document_id, (sum, count))| {
+                let mean = sum.into_iter().map(|v| v / count as f32).collect();
+                (document_id, mean)
+            })
+            .collect())
+    }
+
     /// Brute-force cosine similarity search, highest score first.
     pub fn search(&self, query_vector: &[f32], top_k: usize) -> CoreResult<Vec<ScoredChunk>> {
         let conn = self.conn.lock().unwrap();

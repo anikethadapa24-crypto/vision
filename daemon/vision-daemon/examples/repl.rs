@@ -23,8 +23,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use vision_daemon::transport::windows::{NamedPipeConnector, PIPE_NAME};
     use vision_proto::vision_api_client::VisionApiClient;
     use vision_proto::{
-        DeleteAuditRequest, GetPermissionsRequest, IngestEventRequest, IngestSource,
-        ListAuditRequest, PermissionScope, PermissionScopeType, QueryRequest,
+        DeleteAuditRequest, GetGraphRequest, GetPermissionsRequest, IngestEventRequest,
+        IngestSource, ListAuditRequest, PermissionScope, PermissionScopeType, QueryRequest,
         RevokePermissionRequest, SetPermissionRequest,
     };
 
@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         println!(
             "1) IngestEvent  2) Query  3) GetPermissions  4) SetPermission\n\
-             5) RevokePermission  6) ListAudit  7) DeleteAudit  q) quit"
+             5) RevokePermission  6) ListAudit  7) DeleteAudit  8) GetGraph  q) quit"
         );
         let choice = prompt("choice")?;
 
@@ -126,6 +126,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .await?
                     .into_inner();
                 println!("-> {resp:?}\n");
+            }
+            "8" => {
+                let resp = client
+                    .get_graph(Request::new(GetGraphRequest {}))
+                    .await?
+                    .into_inner();
+                println!("-> {} node(s):", resp.nodes.len());
+                for n in &resp.nodes {
+                    println!("   [{}] {} ({})", &n.id[..8.min(n.id.len())], n.path, n.source);
+                }
+                println!("-> {} edge(s):", resp.edges.len());
+                for e in &resp.edges {
+                    println!(
+                        "   {} <-> {}  weight={:.3}",
+                        &e.from_id[..8.min(e.from_id.len())],
+                        &e.to_id[..8.min(e.to_id.len())],
+                        e.weight
+                    );
+                }
+                println!();
             }
             "q" | "quit" | "exit" => break,
             other => println!("unrecognized choice: {other:?}\n"),

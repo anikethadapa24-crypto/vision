@@ -1,0 +1,278 @@
+/* Graph Explorer (docs/UI.SPEC.md §5e). Reuses the token names/values from
+   App.css's Floating Query UI so both windows read as one system, but
+   opaque rather than glass — an in-window surface, not an overlay (§2.5). */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.graph-root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;
+  --plane: #f9f9f7;
+  --surface-2: #ffffff;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --border: rgba(11, 11, 11, 0.1);
+  --border-strong: rgba(11, 11, 11, 0.16);
+  --accent: #2a78d6;
+  --knowledge: #2a78d6;
+  --structure: #eb6834;
+
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--plane);
+  color: var(--text-primary);
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  .graph-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --plane: #0d0d0d;
+    --surface-2: #232322;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --border: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --accent: #5b9ce8;
+    --knowledge: #3987e5;
+    --structure: #d95926;
+  }
+}
+
+.graph-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.graph-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.graph-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot--filesystem {
+  background: var(--knowledge);
+}
+
+.dot--browser {
+  background: var(--structure);
+}
+
+.dot--unspecified {
+  background: var(--text-muted);
+}
+
+.graph-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.action-button {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-secondary);
+  background: rgba(127, 127, 127, 0.08);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.action-button:hover {
+  background: rgba(127, 127, 127, 0.16);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.graph-canvas-wrap {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.graph-canvas {
+  background: var(--surface-1);
+}
+
+.graph-edge {
+  stroke: var(--border-strong);
+  stroke-linecap: round;
+}
+
+.graph-node {
+  cursor: pointer;
+}
+
+.node-dot {
+  stroke: var(--surface-1);
+  stroke-width: 2px;
+  transition: r 120ms ease;
+}
+
+.node-dot--filesystem {
+  fill: var(--knowledge);
+}
+
+.node-dot--browser {
+  fill: var(--structure);
+}
+
+.node-dot--unspecified {
+  fill: var(--text-muted);
+}
+
+.graph-node:hover .node-dot {
+  r: 12;
+}
+
+.graph-node--selected .node-dot {
+  stroke: var(--accent);
+  stroke-width: 3px;
+}
+
+.node-label {
+  font-size: 10px;
+  fill: var(--text-secondary);
+  pointer-events: none;
+  user-select: none;
+}
+
+.graph-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.graph-empty-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 420px;
+  text-align: center;
+}
+
+.graph-table-wrap {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 24px;
+}
+
+.graph-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.graph-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--plane);
+}
+
+.graph-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.graph-table tr {
+  cursor: pointer;
+}
+
+.graph-table tr:hover td {
+  background: rgba(127, 127, 127, 0.06);
+}
+
+.graph-table-path {
+  color: var(--text-secondary);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  max-width: 480px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.graph-detail {
+  flex-shrink: 0;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.graph-detail-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.graph-detail-path {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.graph-detail-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}

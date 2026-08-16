@@ -24,6 +24,10 @@ service VisionApi {
   // Settings UI: audit log / "forget this" actions.
   rpc ListAudit(ListAuditRequest) returns (ListAuditResponse);
   rpc DeleteAudit(DeleteAuditRequest) returns (DeleteAuditResponse);
+
+  // Graph Explorer: every ingested document as a node, plus similarity-based
+  // edges derived from real chunk embeddings (docs/UI.SPEC.md §5e).
+  rpc GetGraph(GetGraphRequest) returns (GetGraphResponse);
 }
 
 // --- IngestEvent ---
@@ -120,4 +124,29 @@ message DeleteAuditRequest {
 
 message DeleteAuditResponse {
   bool success = 1;
+}
+
+// --- Graph ---
+
+message GraphNode {
+  string id = 1;
+  string path = 2;
+  IngestSource source = 3;
+  int64 created_at_unix_ms = 4;
+}
+
+// An edge is a real similarity relationship between two documents' content
+// (cosine similarity of their chunk-embedding centroids), not a placeholder —
+// see docs/TASKS.md's Parking Lot for what a typed-edge Kùzu graph adds later.
+message GraphEdge {
+  string from_id = 1;
+  string to_id = 2;
+  float weight = 3;
+}
+
+message GetGraphRequest {}
+
+message GetGraphResponse {
+  repeated GraphNode nodes = 1;
+  repeated GraphEdge edges = 2;
 }

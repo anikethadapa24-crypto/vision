@@ -20,6 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let engine = Arc::new(Engine::open(&data_dir)?);
     let _watcher = vision_daemon::watcher::spawn(engine.clone());
+    vision_daemon::http_bridge::spawn(engine.clone());
 
     eprintln!(
         "vision-daemon: starting, listening on {}",

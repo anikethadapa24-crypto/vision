@@ -12,7 +12,7 @@ use tonic::Request;
 
 use vision_daemon::transport::windows::{NamedPipeConnector, PIPE_NAME};
 use vision_proto::vision_api_client::VisionApiClient;
-use vision_proto::{AnswerChunk, QueryRequest};
+use vision_proto::{AnswerChunk, GetGraphRequest, GetGraphResponse, QueryRequest};
 
 pub struct DaemonClient {
     pipe_name: String,
@@ -63,6 +63,17 @@ impl DaemonClient {
             Err(status) => {
                 self.invalidate().await;
                 Err(format!("query failed: {status}"))
+            }
+        }
+    }
+
+    pub async fn get_graph(&self) -> Result<GetGraphResponse, String> {
+        let mut client = self.connect().await?;
+        match client.get_graph(Request::new(GetGraphRequest {})).await {
+            Ok(response) => Ok(response.into_inner()),
+            Err(status) => {
+                self.invalidate().await;
+                Err(format!("get_graph failed: {status}"))
             }
         }
     }

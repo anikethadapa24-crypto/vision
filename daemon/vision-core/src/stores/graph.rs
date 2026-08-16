@@ -89,6 +89,25 @@ impl GraphStore {
         Ok(id)
     }
 
+    /// Every document, for the Graph Explorer (`GetGraph` RPC) — a flat
+    /// scan since there's no scoping concept yet on this stand-in.
+    pub fn list_all(&self) -> CoreResult<Vec<DocumentRecord>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, path, blob_hash, source, created_at_unix_ms FROM documents ORDER BY created_at_unix_ms",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(DocumentRecord {
+                id: row.get(0)?,
+                path: row.get(1)?,
+                blob_hash: row.get(2)?,
+                source: row.get(3)?,
+                created_at_unix_ms: row.get(4)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
     pub fn get(&self, id: &str) -> CoreResult<Option<DocumentRecord>> {
         let conn = self.conn.lock().unwrap();
         let record = conn

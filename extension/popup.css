@@ -1,0 +1,92 @@
+body {
+  margin: 0;
+  width: 260px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #fcfcfb;
+  color: #0b0b0b;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #1a1a19;
+    color: #ffffff;
+  }
+}
+
+.popup {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot--good {
+  background: #0ca30c;
+}
+
+.dot--critical {
+  background: #d03b3b;
+}
+
+.dot--unknown {
+  background: #898781;
+}
+
+.origin {
+  font-size: 12px;
+  color: #898781;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.toggle-row input {
+  cursor: pointer;
+}
+
+.result {
+  font-size: 12px;
+  color: #52514e;
+  min-height: 14px;
+}
+
+.footer {
+  border-top: 1px solid rgba(11, 11, 11, 0.1);
+  padding-top: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .footer {
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.settings-link {
+  font-size: 12px;
+  color: #898781;
+  cursor: not-allowed;
+}

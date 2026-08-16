@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Vision</title>
+  </head>
+  <body>
+    <div class="popup">
+      <div class="status-row">
+        <span id="status-dot" class="dot dot--unknown"></span>
+        <span id="status-label">Checking…</span>
+      </div>
+
+      <div class="origin" id="origin">—</div>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle" />
+        <span>Index this site</span>
+      </label>
+
+      <div class="result" id="result"></div>
+
+      <div class="footer">
+        <span class="settings-link" title="Settings window isn't built yet">Settings…</span>
+      </div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
