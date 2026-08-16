@@ -14,11 +14,16 @@ use vision_proto::{
 };
 
 use crate::engine::Engine;
-use crate::{ingest, query};
+use crate::{ingest, query, synthesize};
 
 /// How many ranked results `Query` returns per request. Fixed for now —
 /// exposing it as a request field is a proto change with no caller today.
 const TOP_K: usize = 5;
+
+/// Generation length cap. Trimmed from 200 to keep a live-demo query under
+/// ~30s on a 1.1B CPU model (~200 tokens measured ~50-60s) while still
+/// leaving room for a couple of grounded sentences.
+const MAX_NEW_TOKENS: usize = 110;
 
 /// The real `VisionApi` gRPC service (`docs/ARCHITECTURE.md` §4.2). Every
 /// RPC is backed by `Engine` — see its module doc for what's real storage
@@ -81,30 +86,52 @@ impl VisionApi for VisionApiService {
     ) -> Result<Response<Self::QueryStream>, Status> {
         let text = request.into_inner().text;
         let engine = self.engine.clone();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
-        let results = run_blocking(move || query::run(&engine, &text, TOP_K)).await?;
-
-        let mut chunks: Vec<Result<AnswerChunk, Status>> = results
-            .into_iter()
-            .map(|r| {
-                Ok(AnswerChunk {
-                    token: r.snippet,
-                    is_final: false,
-                    sources: vec![SourceRef {
-                        document_id: r.document_id,
-                        path: r.path,
-                        timestamp_unix_ms: r.timestamp_unix_ms,
-                    }],
-                })
+        // Runs on the blocking pool: retrieval + (usually) generation, both
+        // synchronous CPU/disk work. Streams tokens live via `tx` as
+        // they're produced; the closure's return value becomes the final
+        // chunk's citation list once this task resolves.
+        let synth_task = tokio::task::spawn_blocking(move || {
+            if engine.llm().is_err() {
+                // No local model available (not downloaded yet, no
+                // network, load failed) — degrade to M7's retrieval-only
+                // snippets rather than failing the whole query. Ranked
+                // sources are still useful on their own; see
+                // docs/TASKS.md's Parking Lot.
+                let results = query::run(&engine, &text, TOP_K)?;
+                for r in &results {
+                    let _ = tx.send(r.snippet.clone());
+                }
+                return Ok(results);
+            }
+            synthesize::run(&engine, &text, TOP_K, MAX_NEW_TOKENS, |token| {
+                let _ = tx.send(token.to_string());
             })
-            .collect();
-        chunks.push(Ok(AnswerChunk {
-            token: String::new(),
-            is_final: true,
-            sources: vec![],
-        }));
+        });
 
-        let stream: Self::QueryStream = Box::pin(tokio_stream::iter(chunks));
+        let output = async_stream::stream! {
+            while let Some(token) = rx.recv().await {
+                yield Ok(AnswerChunk { token, is_final: false, sources: vec![] });
+            }
+            match synth_task.await {
+                Ok(Ok(sources)) => {
+                    let sources = sources
+                        .into_iter()
+                        .map(|r| SourceRef {
+                            document_id: r.document_id,
+                            path: r.path,
+                            timestamp_unix_ms: r.timestamp_unix_ms,
+                        })
+                        .collect();
+                    yield Ok(AnswerChunk { token: String::new(), is_final: true, sources });
+                }
+                Ok(Err(e)) => yield Err(to_status(e)),
+                Err(e) => yield Err(Status::internal(format!("query task panicked: {e}"))),
+            }
+        };
+
+        let stream: Self::QueryStream = Box::pin(output);
         Ok(Response::new(stream))
     }
 
@@ -192,6 +219,8 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "downloads and runs the real local LLM on first call — see docs/TASKS.md's \
+                Parking Lot; run explicitly with `cargo test -- --ignored`"]
     async fn query_stream_ends_with_a_final_chunk() {
         let (svc, _dir) = test_service();
         let stream = svc
@@ -207,6 +236,8 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "downloads and runs the real local LLM on first call — see docs/TASKS.md's \
+                Parking Lot; run explicitly with `cargo test -- --ignored`"]
     async fn query_after_ingest_surfaces_the_indexed_file_with_a_citation() {
         let (svc, dir) = test_service();
         let file_path = dir.path().join("cats.md");

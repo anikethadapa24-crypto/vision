@@ -69,17 +69,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .query(Request::new(QueryRequest { text }))
                     .await?
                     .into_inner();
-                let mut rank = 0;
                 while let Some(chunk) = stream.next().await {
                     let chunk = chunk?;
                     if chunk.is_final {
-                        println!("-- end of results --\n");
+                        println!("\n\n-- sources --");
+                        for (i, source) in chunk.sources.iter().enumerate() {
+                            println!("{}. {}", i + 1, source.path);
+                        }
+                        println!();
                         break;
                     }
-                    rank += 1;
-                    for source in &chunk.sources {
-                        println!("{rank}. [{}] {}", source.path, chunk.token);
-                    }
+                    print!("{}", chunk.token);
+                    io::stdout().flush()?;
                 }
             }
             "3" => {

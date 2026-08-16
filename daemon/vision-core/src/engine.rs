@@ -4,10 +4,12 @@
 //! (`docs/ARCHITECTURE.md` §1 "single writer").
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use crate::blob::BlobStore;
 use crate::error::CoreResult;
+use crate::llm::LlmRuntime;
 use crate::stores::audit::AuditStore;
 use crate::stores::config::ConfigStore;
 use crate::stores::graph::GraphStore;
@@ -19,6 +21,14 @@ pub struct Engine {
     pub graph: GraphStore,
     pub vectors: VectorStore,
     pub blobs: BlobStore,
+    models_dir: PathBuf,
+    /// Lazily loaded on first `Query` — loading means a first-run model
+    /// download (~640MB) plus reading it into memory, not something every
+    /// daemon startup should pay for whether or not a query ever arrives.
+    /// Only successful loads are cached: a failed attempt (e.g. no network
+    /// yet) isn't remembered, so the next query tries again rather than
+    /// staying permanently broken for the rest of the process's life.
+    llm: OnceLock<LlmRuntime>,
 }
 
 impl Engine {
@@ -37,7 +47,22 @@ impl Engine {
             graph: GraphStore::open(&graph_dir.join("graph.sqlite"))?,
             vectors: VectorStore::open(&vectors_dir.join("vectors.sqlite"))?,
             blobs: BlobStore::open(base_dir.join("blobs"))?,
+            models_dir: base_dir.join("models"),
+            llm: OnceLock::new(),
         })
+    }
+
+    pub fn llm(&self) -> CoreResult<&LlmRuntime> {
+        if let Some(rt) = self.llm.get() {
+            return Ok(rt);
+        }
+        // Two concurrent first-queries could both reach this point and
+        // both pay the load cost — `OnceLock::set` just means the loser's
+        // work is thrown away, not a correctness issue at today's "one
+        // query at a time from a REPL/popup" scale.
+        let runtime = LlmRuntime::load(&self.models_dir)?;
+        let _ = self.llm.set(runtime);
+        Ok(self.llm.get().expect("just set"))
     }
 }
 

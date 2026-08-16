@@ -80,6 +80,8 @@ async fn ingest_event_round_trips_over_real_grpc() {
 }
 
 #[tokio::test]
+#[ignore = "downloads and runs the real local LLM on first call — see docs/TASKS.md's \
+            Parking Lot; run explicitly with `cargo test -- --ignored`"]
 async fn query_streams_a_final_chunk_over_real_grpc() {
     let (mut client, _dir) = spawn_server_and_connect().await;
 
@@ -102,6 +104,8 @@ async fn query_streams_a_final_chunk_over_real_grpc() {
 }
 
 #[tokio::test]
+#[ignore = "downloads and runs the real local LLM on first call — see docs/TASKS.md's \
+            Parking Lot; run explicitly with `cargo test -- --ignored`"]
 async fn ingest_then_query_surfaces_a_real_cited_result_over_real_grpc() {
     let (mut client, dir) = spawn_server_and_connect().await;
     let file_path = dir.path().join("cats.md");
